@@ -1,0 +1,27 @@
+CHAPTER 4: DATABASE MANAGEMENT SYSTEMS - UNIT 2
+Subject Code: 21CS53 / 18CS53 (VTU Scheme)
+Course: Database Management Systems (B.E Computer Science & Engineering)
+
+1. CONCEPT OF TRANSACTION AND ACID PROPERTIES
+A transaction is a logical unit of database processing that includes one or more database access operations such as insert, delete, modify, or retrieve. In a multi-user database system, concurrent execution of multiple transactions is permitted to improve performance and resource utilization.
+
+To maintain integrity and correctness of data during concurrent execution and system failures, every database management system must enforce the ACID properties:
+- Atomicity: A transaction is an atomic unit of processing; it is either performed in its entirety or not performed at all. No intermediate state is visible.
+- Consistency: A transaction must preserve consistency. If a transaction executes completely from beginning to end without interference, it takes the database from one valid state to another valid state that satisfies all integrity constraints.
+- Isolation: Even though multiple transactions may execute concurrently, the execution of each transaction should appear independent of others. Intermediate transaction results are hidden from concurrently executing transactions.
+- Durability: Once a transaction changes the database and the changes are committed, these changes must never be lost despite subsequent system failures.
+
+2. RELATIONAL DATABASE DESIGN AND NORMALIZATION
+Normalization is the systematic approach of decomposing tables to eliminate data redundancy (repetition) and undesirable characteristics like insertion, deletion, and update anomalies.
+
+The standard normal forms include:
+- First Normal Form (1NF): A relation schema R is in 1NF if and only if all underlying domains contain only atomic (indivisible) values, and each attribute value in a tuple is a single atomic value from the domain. Repeating groups and multi-valued attributes are prohibited.
+- Second Normal Form (2NF): A relation schema R is in 2NF if it is in 1NF and every non-prime attribute is fully functionally dependent on the primary key (no partial functional dependencies).
+- Third Normal Form (3NF): A relation schema R is in 3NF if it is in 2NF and no non-prime attribute is transitively dependent on the primary key (no transitive dependencies X -> Y -> Z).
+- Boyce-Codd Normal Form (BCNF): A relation schema R is in BCNF if whenever a non-trivial functional dependency X -> Y holds in R, X is a superkey of R. BCNF is strictly stronger than 3NF.
+
+3. CONCURRENCY CONTROL TECHNIQUES
+Two-Phase Locking (2PL) is a concurrency control protocol that guarantees serializability:
+- Growing Phase: The transaction may obtain locks but may not release any locks.
+- Shrinking Phase: The transaction may release locks but may not obtain any new locks.
+Deadlock occurs when two or more transactions are waiting for locks held by each other in a circular wait condition. Deadlock detection is achieved using a Wait-For Graph (WFG).

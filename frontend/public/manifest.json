@@ -1,0 +1,16 @@
+{
+  "short_name": "SourceLock",
+  "name": "SourceLock - Personal Study SPACE",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#e0f2fe",
+  "theme_color": "#38bdf8",
+  "display": "standalone",
+  "orientation": "portrait"
+}
