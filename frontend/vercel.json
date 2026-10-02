@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://sourcelock.onrender.com/api/:path*"
+    },
+    {
+      "source": "/vault/:path*",
+      "destination": "https://sourcelock.onrender.com/vault/:path*"
+    },
+    {
+      "source": "/screenshots/:path*",
+      "destination": "https://sourcelock.onrender.com/screenshots/:path*"
+    }
+  ]
+}
