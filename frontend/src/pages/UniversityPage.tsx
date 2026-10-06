@@ -8,6 +8,7 @@ import {
   ShieldCheck, 
   AlertCircle 
 } from 'lucide-react';
+import { getApiUrl, getFileUrl } from '../lib/api';
 
 export default function UniversityPage() {
   const [updates, setUpdates] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export default function UniversityPage() {
 
   const fetchUpdates = async () => {
     try {
-      const res = await fetch('/api/university/updates');
+      const res = await fetch(getApiUrl('/api/university/updates'));
       const data = await res.json();
       setUpdates(data);
     } catch (e) {
@@ -32,7 +33,7 @@ export default function UniversityPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/university/scrape', { method: 'POST' });
+      const res = await fetch(getApiUrl('/api/university/scrape'), { method: 'POST' });
       const data = await res.json();
       if (data.error) setError(data.error);
       else fetchUpdates();
@@ -44,7 +45,7 @@ export default function UniversityPage() {
   };
 
   const handleMarkRead = async (id: string) => {
-    await fetch(`/api/university/updates/${id}/read`, { method: 'POST' });
+    await fetch(getApiUrl(`/api/university/updates/${id}/read`), { method: 'POST' });
     fetchUpdates();
   };
 
@@ -141,13 +142,13 @@ export default function UniversityPage() {
                       <Camera className="w-3.5 h-3.5 text-sky-600" /> Screenshot Proof
                     </div>
                     <a 
-                      href={`/screenshots/${update.screenshotPath}`} 
+                      href={getFileUrl(`/screenshots/${update.screenshotPath}`)} 
                       target="_blank" 
                       rel="noreferrer"
                       className="block group relative overflow-hidden rounded-2xl border-2 border-sky-300 hover:border-sky-500 transition-all shadow-md"
                     >
                       <img 
-                        src={`/screenshots/${update.screenshotPath}`} 
+                        src={getFileUrl(`/screenshots/${update.screenshotPath}`)} 
                         alt="Playwright Proof" 
                         className="w-full h-44 object-cover object-top group-hover:scale-105 transition-transform duration-300"
                       />

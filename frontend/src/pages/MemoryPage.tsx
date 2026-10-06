@@ -9,13 +9,14 @@ import {
   Zap, 
   Info 
 } from 'lucide-react';
+import { getApiUrl } from '../lib/api';
 
 export default function MemoryPage() {
   const [memory, setMemory] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/memory')
+    fetch(getApiUrl('/api/memory'))
       .then(res => res.json())
       .then(data => {
         const memObj: Record<string, string> = {};
@@ -29,7 +30,7 @@ export default function MemoryPage() {
   const handleSave = async (key: string, value: string) => {
     setSaving(key);
     try {
-      await fetch('/api/memory', {
+      await fetch(getApiUrl('/api/memory'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })

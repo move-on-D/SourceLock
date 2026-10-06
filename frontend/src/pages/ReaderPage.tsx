@@ -20,6 +20,7 @@ import {
   FileCode,
   Layers
 } from 'lucide-react';
+import { getApiUrl, getFileUrl } from '../lib/api';
 
 export default function ReaderPage() {
   const { id } = useParams();
@@ -50,7 +51,7 @@ export default function ReaderPage() {
   const paraRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
   useEffect(() => {
-    fetch('/api/documents')
+    fetch(getApiUrl('/api/documents'))
       .then(res => res.json())
       .then(data => {
         setDocuments(data);
@@ -72,7 +73,7 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!selectedDocId) return;
 
-    fetch('/api/documents')
+    fetch(getApiUrl('/api/documents'))
       .then(res => res.json())
       .then(data => {
         const found = data.find((d: any) => d.id === selectedDocId);
@@ -81,7 +82,7 @@ export default function ReaderPage() {
           const isPdf = found.filename.endsWith('.pdf');
           setViewMode(isPdf ? 'pdf' : 'paper');
 
-          fetch(`/vault/${found.filename}`)
+          fetch(getFileUrl(`/vault/${found.filename}`))
             .then(res => res.text())
             .then(text => {
               const paras = text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 10);
@@ -103,7 +104,7 @@ export default function ReaderPage() {
     setSources([]);
 
     try {
-      const res = await fetch('/api/ai/ask', {
+      const res = await fetch(getApiUrl('/api/ai/ask'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, documentId: selectedDocId })
@@ -267,7 +268,7 @@ export default function ReaderPage() {
 
               {isPdf && (
                 <a
-                  href={`/vault/${doc.filename}`}
+                  href={getFileUrl(`/vault/${doc.filename}`)}
                   target="_blank"
                   rel="noreferrer"
                   className="p-1 rounded-lg bg-white/90 hover:bg-white text-slate-700 border border-sky-300 shadow-xs"
@@ -287,7 +288,7 @@ export default function ReaderPage() {
               <div className="w-full h-full bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-slate-300">
                 <iframe
                   id="source-pdf-frame"
-                  src={`/vault/${doc.filename}#page=${highlightedPage || 1}`}
+                  src={`${getFileUrl(`/vault/${doc.filename}`)}#page=${highlightedPage || 1}`}
                   className="w-full h-full border-none"
                   title="High-Res PDF Viewer"
                 />

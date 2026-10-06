@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   FileText, 
@@ -10,45 +10,124 @@ import {
   AlertCircle, 
   ArrowRight,
   HardDrive,
-  FolderOpen
+  FolderOpen,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
+import { getApiUrl } from '../lib/api';
 
 export default function VaultPage() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [isDragging, setIsDragging] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error'; text: string } | null>(null);
+  
+  const pollIntervalRef = useRef<any>(null);
 
   useEffect(() => {
     fetchDocuments();
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
   }, []);
 
   const fetchDocuments = async () => {
+    setIsFetching(true);
     try {
-      const res = await fetch('/api/documents');
+      const res = await fetch(getApiUrl('/api/documents'));
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
       const data = await res.json();
-      setDocuments(data);
-    } catch (e) {
-      console.error(e);
+      if (Array.isArray(data)) {
+        setDocuments(data);
+        
+        // If any document is still processing, start polling until ready
+        const hasProcessing = data.some((d: any) => d.status === 'processing');
+        if (hasProcessing && !pollIntervalRef.current) {
+          pollIntervalRef.current = setInterval(async () => {
+            try {
+              const pollRes = await fetch(getApiUrl('/api/documents'));
+              if (pollRes.ok) {
+                const pollData = await pollRes.json();
+                if (Array.isArray(pollData)) {
+                  setDocuments(pollData);
+                  const stillProcessing = pollData.some((d: any) => d.status === 'processing');
+                  if (!stillProcessing && pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                  }
+                }
+              }
+            } catch (err) {
+              // Ignore polling errors
+            }
+          }, 2500);
+        } else if (!hasProcessing && pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    } catch (e: any) {
+      console.error('Fetch documents error:', e);
+      setStatusMessage({
+        type: 'info',
+        text: 'Cloud server is waking up... Please wait 15-30 seconds or tap Refresh.'
+      });
+    } finally {
+      setIsFetching(false);
     }
   };
 
   const uploadFile = async (file: File) => {
+    // 50 MB check
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setStatusMessage({
+        type: 'error',
+        text: `File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 50 MB.`
+      });
+      return;
+    }
+
     const formData = new FormData();
     formData.append('document', file);
     
     setIsUploading(true);
+    setStatusMessage({
+      type: 'info',
+      text: `Uploading "${file.name}" (${(file.size / (1024 * 1024)).toFixed(2)} MB)... Please wait.`
+    });
+
     try {
-      const res = await fetch('/api/documents/upload', {
+      const uploadUrl = getApiUrl('/api/documents/upload');
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
-      if (res.ok) {
-        fetchDocuments();
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Upload failed with status ${res.status}: ${errorText}`);
       }
-    } catch (error) {
+
+      const result = await res.json();
+      setStatusMessage({
+        type: 'success',
+        text: `"${file.name}" uploaded successfully! Indexing text & preparing for verbatim reader...`
+      });
+
+      // Refresh documents and trigger polling
+      await fetchDocuments();
+    } catch (error: any) {
       console.error("Upload failed", error);
+      setStatusMessage({
+        type: 'error',
+        text: `Upload failed: ${error.message || 'Server error'}. If the server was sleeping, please retry in a few seconds.`
+      });
     } finally {
       setIsUploading(false);
     }
@@ -57,6 +136,7 @@ export default function VaultPage() {
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       uploadFile(e.target.files[0]);
+      e.target.value = ''; // Reset input so same file can be re-uploaded
     }
   };
 
@@ -78,17 +158,41 @@ export default function VaultPage() {
   };
 
   const filteredDocs = documents.filter(doc => {
-    const matchesSearch = doc.originalName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = doc.originalName?.toLowerCase().includes(searchQuery.toLowerCase());
     if (filterType === 'all') return matchesSearch;
-    if (filterType === 'pdf') return matchesSearch && doc.filename.endsWith('.pdf');
-    if (filterType === 'docx') return matchesSearch && doc.filename.endsWith('.docx');
-    if (filterType === 'txt') return matchesSearch && doc.filename.endsWith('.txt');
+    if (filterType === 'pdf') return matchesSearch && doc.filename?.endsWith('.pdf');
+    if (filterType === 'docx') return matchesSearch && doc.filename?.endsWith('.docx');
+    if (filterType === 'txt') return matchesSearch && doc.filename?.endsWith('.txt');
     return matchesSearch;
   });
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col overflow-y-auto max-w-7xl mx-auto w-full space-y-4">
       
+      {/* STATUS NOTIFICATION BANNER */}
+      {statusMessage && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs md:text-sm font-bold shadow-sm transition-all ${
+          statusMessage.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+            : statusMessage.type === 'error'
+            ? 'bg-rose-50 border-rose-300 text-rose-900'
+            : 'bg-sky-50 border-sky-300 text-sky-900 animate-pulse'
+        }`}>
+          <div className="flex items-center gap-2">
+            {statusMessage.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+            {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+            {statusMessage.type === 'info' && <Loader2 className="w-4 h-4 text-sky-600 animate-spin shrink-0" />}
+            <span>{statusMessage.text}</span>
+          </div>
+          <button 
+            onClick={() => setStatusMessage(null)}
+            className="text-slate-500 hover:text-slate-800 ml-2 px-2 py-0.5 rounded text-xs underline font-normal"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ======================================================== */}
       {/* COMPACT & NEAT SKY BLUE HERO BANNER                      */}
       {/* ======================================================== */}
@@ -116,7 +220,7 @@ export default function VaultPage() {
             </span>
           </div>
           <p className="text-slate-600 text-xs md:text-sm font-medium leading-snug">
-            Upload textbooks, lecture notes, or slides. Documents are locked against editing and indexed for verbatim answer retrieval.
+            Upload textbooks, lecture notes, or slides (up to 50MB). Documents are locked against editing and indexed for verbatim answer retrieval.
           </p>
           <div className="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600 pt-0.5">
             <span className="px-2 py-0.5 rounded bg-white/90 border border-sky-200 text-sky-800">📄 PDF</span>
@@ -128,9 +232,20 @@ export default function VaultPage() {
 
         {/* Right Side: Scaled-down, neat Red Upload Button */}
         <div className="z-10 shrink-0 w-full sm:w-auto flex flex-col items-center lg:items-end">
-          <label className="cursor-pointer w-full sm:w-auto bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black px-5 py-2.5 md:px-6 md:py-3 rounded-xl shadow-md shadow-red-500/30 transition-all duration-200 active:scale-95 border border-red-400 uppercase tracking-wider text-xs md:text-sm flex items-center justify-center gap-2">
-            <Upload className="w-4 h-4 stroke-[3]" />
-            <span>{isUploading ? 'Uploading...' : 'Upload Document'}</span>
+          <label className={`cursor-pointer w-full sm:w-auto bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black px-5 py-2.5 md:px-6 md:py-3 rounded-xl shadow-md shadow-red-500/30 transition-all duration-200 active:scale-95 border border-red-400 uppercase tracking-wider text-xs md:text-sm flex items-center justify-center gap-2 ${
+            isUploading ? 'opacity-70 pointer-events-none' : ''
+          }`}>
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Uploading...</span>
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 stroke-[3]" />
+                <span>Upload Document</span>
+              </>
+            )}
             <input 
               type="file" 
               className="hidden" 
@@ -140,24 +255,35 @@ export default function VaultPage() {
             />
           </label>
           <span className="text-[10px] text-slate-500 font-semibold mt-1">
-            or drag & drop files here
+            or drag & drop files here (up to 50MB)
           </span>
         </div>
       </div>
 
       {/* ======================================================== */}
-      {/* FILTER TABS & SEARCH BAR                                */}
+      {/* FILTER TABS & SEARCH BAR & REFRESH                       */}
       {/* ======================================================== */}
       <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
-        <div className="relative flex-1 w-full max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-sky-600" />
-          <input
-            type="text"
-            placeholder="Search notes, textbooks, units..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border-2 border-sky-200 rounded-xl text-xs md:text-sm text-slate-900 placeholder-slate-400 font-bold focus:outline-none focus:border-sky-500 shadow-xs"
-          />
+        <div className="relative flex-1 w-full max-w-md flex gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-sky-600" />
+            <input
+              type="text"
+              placeholder="Search notes, textbooks, units..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-white border-2 border-sky-200 rounded-xl text-xs md:text-sm text-slate-900 placeholder-slate-400 font-bold focus:outline-none focus:border-sky-500 shadow-xs"
+            />
+          </div>
+          <button
+            onClick={fetchDocuments}
+            disabled={isFetching}
+            className="px-3 py-2 bg-white border-2 border-sky-200 rounded-xl hover:bg-sky-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 shrink-0"
+            title="Refresh Vault Documents"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-sky-600' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
 
         {/* Filter Pills */}
@@ -184,16 +310,20 @@ export default function VaultPage() {
       {filteredDocs.length === 0 ? (
         <div className="flex-1 min-h-[180px] flex flex-col items-center justify-center border-2 border-dashed border-sky-300 rounded-2xl bg-white/50 p-6 text-center">
           <FolderOpen className="w-10 h-10 text-sky-500 mb-1.5 opacity-70" />
-          <h3 className="text-sm font-black text-slate-900 mb-0.5">No documents found matching query</h3>
+          <h3 className="text-sm font-black text-slate-900 mb-0.5">
+            {isFetching ? 'Loading documents...' : 'No documents in vault'}
+          </h3>
           <p className="text-xs text-slate-600 max-w-sm font-medium">
-            Upload files in the box above or clear your search query.
+            {isFetching 
+              ? 'Connecting to your secure cloud vault...' 
+              : 'Upload textbooks or notes above to read and query verbatim.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDocs.map((doc) => {
-            const isPdf = doc.filename.endsWith('.pdf');
-            const isDocx = doc.filename.endsWith('.docx');
+            const isPdf = doc.filename?.endsWith('.pdf');
+            const isDocx = doc.filename?.endsWith('.docx');
 
             return (
               <div 
@@ -220,7 +350,8 @@ export default function VaultPage() {
                     {doc.originalName}
                   </h3>
                   <p className="text-[11px] text-slate-500 font-mono mb-3">
-                    {(doc.size / (1024 * 1024)).toFixed(2)} MB • {new Date(doc.uploadDate).toLocaleDateString()}
+                    {doc.size ? `${(doc.size / (1024 * 1024)).toFixed(2)} MB • ` : ''}
+                    {doc.uploadDate ? new Date(doc.uploadDate).toLocaleDateString() : 'Recent'}
                   </p>
                 </div>
 

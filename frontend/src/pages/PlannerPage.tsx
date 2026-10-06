@@ -6,6 +6,7 @@ import {
   Flame, 
   Check 
 } from 'lucide-react';
+import { getApiUrl } from '../lib/api';
 
 export default function PlannerPage() {
   const [plan, setPlan] = useState<any[]>([]);
@@ -13,7 +14,7 @@ export default function PlannerPage() {
   const [completed, setCompleted] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
-    fetch('/api/planner')
+    fetch(getApiUrl('/api/planner'))
       .then(res => res.json())
       .then(data => {
         setPlan(data);
