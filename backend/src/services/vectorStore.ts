@@ -40,16 +40,27 @@ export async function addDocumentChunk(chunk: {
 
 export async function searchSimilar(
   queryVector: number[],
-  topK: number = 4,
+  topK: number = 5,
   documentId?: string
 ): Promise<any[]> {
   const idx = await getVectorIndex();
-  const results = await idx.queryItems(queryVector, topK);
+  
+  // Query a larger candidate pool if filtering by a specific document
+  const fetchCount = documentId ? Math.max(topK * 5, 25) : topK;
+  const results = await idx.queryItems(queryVector, fetchCount);
 
-  // Filter by documentId if provided
-  const filtered = documentId
-    ? results.filter(r => r.item.metadata.documentId === documentId)
-    : results;
+  let filtered = results;
+  if (documentId) {
+    const docMatches = results.filter(r => r.item.metadata && r.item.metadata.documentId === documentId);
+    // If we found matches in the target document, use them; otherwise fallback to top global results
+    if (docMatches.length > 0) {
+      filtered = docMatches.slice(0, topK);
+    } else {
+      filtered = results.slice(0, topK);
+    }
+  } else {
+    filtered = results.slice(0, topK);
+  }
 
   return filtered.map(r => ({
     ...r.item.metadata,
