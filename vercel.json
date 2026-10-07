@@ -11,6 +11,10 @@
     {
       "source": "/screenshots/:path*",
       "destination": "https://sourcelock.onrender.com/screenshots/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
