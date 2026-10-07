@@ -40,19 +40,31 @@ memoryRouter.post('/', (req, res) => {
   }
 });
 
-// POST upload syllabus document or image into Memory
+// DELETE a memory key (e.g. remove attached image)
+memoryRouter.delete('/:key', (req, res) => {
+  try {
+    const { key } = req.params;
+    execute('DELETE FROM memory WHERE key = ?', [key]);
+    res.json({ success: true, key });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete key' });
+  }
+});
+
+// POST upload file (PDF, Doc, or Photo) to ANY Academic Lock section
 memoryRouter.post('/upload', async (req, res) => {
   try {
-    if (!req.files || (!req.files.syllabus && !req.files.file)) {
-      return res.status(400).json({ error: 'No syllabus file uploaded' });
+    if (!req.files || (!req.files.file && !req.files.syllabus)) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const file: any = req.files.syllabus || req.files.file;
+    const section = (req.body && req.body.section) ? String(req.body.section).trim() : 'syllabus';
+    const file: any = req.files.file || req.files.syllabus;
     const uploadedFile = Array.isArray(file) ? file[0] : file;
 
     const ext = path.extname(uploadedFile.name).toLowerCase();
     const id = uuidv4();
-    const savedFilename = `syllabus-${id}${ext}`;
+    const savedFilename = `${section}-${id}${ext}`;
     const filePath = path.join(vaultDir, savedFilename);
 
     if (!fs.existsSync(vaultDir)) {
@@ -75,38 +87,53 @@ memoryRouter.post('/upload', async (req, res) => {
       extractedText = fs.readFileSync(filePath, 'utf-8');
     } else if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
       isImage = true;
-      extractedText = `[Syllabus Photo Attached: ${uploadedFile.name}]`;
-      // Save image reference
+      extractedText = `[Official Photo Attached: ${uploadedFile.name}]`;
+      
+      // Save image reference in memory
+      const imageKey = `${section}_image`;
       execute(
-        `INSERT INTO memory (key, value, updatedAt) VALUES ('syllabus_image', ?, datetime('now'))
+        `INSERT INTO memory (key, value, updatedAt) VALUES (?, ?, datetime('now'))
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = datetime('now')`,
-        [savedFilename]
+        [imageKey, savedFilename]
       );
     } else {
       return res.status(400).json({ error: `Unsupported file format ${ext}` });
     }
 
-    // Clean up extracted text
     const cleanText = extractedText.trim();
     if (cleanText) {
-      // Update syllabus in memory
+      // Fetch existing text for section to see if we should append or set
+      const existing = queryAll('SELECT value FROM memory WHERE key = ?', [section]);
+      let updatedValue = cleanText;
+
+      if (isImage && existing && existing[0]?.value) {
+        // Don't overwrite existing typed text when attaching a photo, just append notice
+        const currentText = String(existing[0].value);
+        if (!currentText.includes(savedFilename)) {
+          updatedValue = `${currentText}\n\n[Photo: ${uploadedFile.name}]`;
+        } else {
+          updatedValue = currentText;
+        }
+      }
+
       execute(
-        `INSERT INTO memory (key, value, updatedAt) VALUES ('syllabus', ?, datetime('now'))
+        `INSERT INTO memory (key, value, updatedAt) VALUES (?, ?, datetime('now'))
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = datetime('now')`,
-        [cleanText]
+        [section, updatedValue]
       );
     }
 
     res.json({
       success: true,
+      section,
       filename: uploadedFile.name,
       savedFilename: isImage ? savedFilename : undefined,
       isImage,
-      extractedText: cleanText.slice(0, 500) // snippet preview
+      extractedText: cleanText.slice(0, 500)
     });
 
   } catch (error: any) {
-    console.error('Syllabus upload error:', error);
-    res.status(500).json({ error: 'Failed to process syllabus file: ' + error.message });
+    console.error('Academic upload error:', error);
+    res.status(500).json({ error: 'Failed to process file: ' + error.message });
   }
 });

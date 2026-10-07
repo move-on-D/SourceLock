@@ -10,35 +10,54 @@ import {
   Info,
   Upload,
   Image as ImageIcon,
-  FileText,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Trash2,
+  ExternalLink,
+  ClipboardList
 } from 'lucide-react';
 import { getApiUrl, getFileUrl } from '../lib/api';
 
+interface SectionConfig {
+  key: string;
+  title: string;
+  description: string;
+  placeholder: string;
+  icon: any;
+  iconBg: string;
+  iconColor: string;
+  rows?: number;
+}
+
 export default function MemoryPage() {
   const [memory, setMemory] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const [uploadingSyllabus, setUploadingSyllabus] = useState(false);
-  const [uploadingTimetable, setUploadingTimetable] = useState(false);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [uploadingSection, setUploadingSection] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetch(getApiUrl('/api/memory'))
-      .then(res => res.json())
-      .then(data => {
-        const memObj: Record<string, string> = {};
+    fetchMemory();
+  }, []);
+
+  const fetchMemory = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/memory'));
+      const data = await res.json();
+      const memObj: Record<string, string> = {};
+      if (Array.isArray(data)) {
         data.forEach((item: any) => {
           memObj[item.key] = item.value;
         });
-        setMemory(memObj);
-      })
-      .catch(e => console.error(e));
-  }, []);
+      }
+      setMemory(memObj);
+    } catch (e) {
+      console.error('Error fetching memory:', e);
+    }
+  };
 
   const handleSave = async (key: string, value: string) => {
-    setSaving(key);
+    setSavingKey(key);
     try {
       await fetch(getApiUrl('/api/memory'), {
         method: 'POST',
@@ -46,27 +65,28 @@ export default function MemoryPage() {
         body: JSON.stringify({ key, value })
       });
       setMemory(prev => ({ ...prev, [key]: value }));
-      setStatusMessage({ type: 'success', text: `Saved ${key.replace('_', ' ')} successfully!` });
+      setStatusMessage({ 
+        type: 'success', 
+        text: `Saved "${key.replace('_', ' ').toUpperCase()}" successfully!` 
+      });
     } catch (e: any) {
       console.error(e);
       setStatusMessage({ type: 'error', text: 'Failed to save changes.' });
     } finally {
-      setTimeout(() => setSaving(null), 1200);
+      setTimeout(() => setSavingKey(null), 1200);
     }
   };
 
-  const handleFileUpload = async (file: File, targetKey: 'syllabus' | 'timetable') => {
-    const isSyllabus = targetKey === 'syllabus';
-    if (isSyllabus) setUploadingSyllabus(true);
-    else setUploadingTimetable(true);
-
+  const handleFileUpload = async (file: File, section: string) => {
+    setUploadingSection(section);
     setStatusMessage({
       type: 'info',
-      text: `Uploading & extracting text from "${file.name}"...`
+      text: `Uploading & extracting from "${file.name}" for ${section.replace('_', ' ')}...`
     });
 
     const formData = new FormData();
-    formData.append('syllabus', file);
+    formData.append('file', file);
+    formData.append('section', section);
 
     try {
       const res = await fetch(getApiUrl('/api/memory/upload'), {
@@ -79,30 +99,35 @@ export default function MemoryPage() {
         throw new Error(errText);
       }
 
-      const data = await res.json();
-      
-      // Refresh memory
-      const memRes = await fetch(getApiUrl('/api/memory'));
-      const memData = await memRes.json();
-      const memObj: Record<string, string> = {};
-      memData.forEach((item: any) => {
-        memObj[item.key] = item.value;
-      });
-      setMemory(memObj);
+      await fetchMemory();
 
       setStatusMessage({
         type: 'success',
-        text: `Successfully imported "${file.name}" into your All-Time Memory!`
+        text: `Successfully imported "${file.name}" into ${section.replace('_', ' ')}!`
       });
     } catch (err: any) {
       console.error(err);
       setStatusMessage({
         type: 'error',
-        text: `Failed to upload: ${err.message || 'File error'}`
+        text: `Upload failed: ${err.message || 'File processing error'}`
       });
     } finally {
-      if (isSyllabus) setUploadingSyllabus(false);
-      else setUploadingTimetable(false);
+      setUploadingSection(null);
+    }
+  };
+
+  const handleRemoveImage = async (imageKey: string) => {
+    if (!window.confirm('Remove this attached photo?')) return;
+    try {
+      await fetch(getApiUrl(`/api/memory/${imageKey}`), { method: 'DELETE' });
+      setMemory(prev => {
+        const updated = { ...prev };
+        delete updated[imageKey];
+        return updated;
+      });
+      setStatusMessage({ type: 'success', text: 'Attached photo removed.' });
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -120,18 +145,67 @@ Wednesday: 09:00 AM - 10:00 AM: OS | 10:15 AM - 11:15 AM: DBMS | 02:00 PM - 04:0
 Thursday: 09:00 AM - 10:00 AM: DAA | 10:15 AM - 11:15 AM: CN | 02:00 PM - 04:00 PM: SE
 Friday: 09:00 AM - 10:00 AM: SE | 10:15 AM - 11:15 AM: DAA | 02:00 PM - 04:00 PM: Revision`;
 
+    const vtuExam = `VTU Exam Pattern:
+- 5 Modules in Total (100 Marks)
+- Each module has 2 full questions with internal choice (20 marks each)
+- Passing Marks: 35 in Semester End Exam (SEE), 40 Total (CIE + SEE).`;
+
     handleSave('university_url', 'https://vtu.ac.in');
-    handleSave('course_details', 'VTU B.E Computer Science & Eng, 5th Sem. Exam Pattern: 5 Modules, 100 Marks Total (20 Marks/Module).');
+    handleSave('course_details', 'VTU B.E Computer Science & Eng, 5th Sem (Scheme 2022).');
     handleSave('syllabus', vtuSyllabus);
     handleSave('timetable', vtuTimetable);
+    handleSave('exam_scheme', vtuExam);
   };
 
+  const sections: SectionConfig[] = [
+    {
+      key: 'course_details',
+      title: 'Course, Semester & Scheme',
+      description: 'Your branch, semester, regulation scheme, and college details.',
+      placeholder: 'e.g. B.Tech Computer Science, 5th Sem, Scheme 2022 (VTU)...',
+      icon: Award,
+      iconBg: 'bg-purple-100',
+      iconColor: 'text-purple-600',
+      rows: 2
+    },
+    {
+      key: 'timetable',
+      title: 'College Weekly Timetable',
+      description: 'Your weekly periods, labs, and free hours (type in or upload a photo of the chart).',
+      placeholder: 'Monday: 09:00 AM - 10:00 AM: DBMS | 10:15 AM - 11:15 AM: OS...',
+      icon: Calendar,
+      iconBg: 'bg-amber-100',
+      iconColor: 'text-amber-600',
+      rows: 4
+    },
+    {
+      key: 'syllabus',
+      title: 'Course Syllabus & Modules',
+      description: 'Complete breakdown of units and subjects (upload syllabus PDF or page photo).',
+      placeholder: 'Module 1: Relational Model & SQL...\nModule 2: Normalization...',
+      icon: BookOpen,
+      iconBg: 'bg-emerald-100',
+      iconColor: 'text-emerald-600',
+      rows: 6
+    },
+    {
+      key: 'exam_scheme',
+      title: 'Exam Pattern & Marks Scheme',
+      description: 'Internal tests pattern, semester blueprints, and marks weightage.',
+      placeholder: '3 Internals (average of top 2) + 100 Marks Final Exam (5 Modules Choice)...',
+      icon: ClipboardList,
+      iconBg: 'bg-rose-100',
+      iconColor: 'text-rose-600',
+      rows: 3
+    }
+  ];
+
   return (
-    <div className="p-4 md:p-6 h-full overflow-y-auto max-w-7xl mx-auto w-full space-y-4">
+    <div className="p-3 sm:p-5 h-full overflow-y-auto max-w-7xl mx-auto w-full space-y-4">
       
       {/* STATUS NOTIFICATION BANNER */}
       {statusMessage && (
-        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs md:text-sm font-bold shadow-sm transition-all ${
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs sm:text-sm font-bold shadow-sm transition-all ${
           statusMessage.type === 'success' 
             ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
             : statusMessage.type === 'error'
@@ -153,217 +227,181 @@ Friday: 09:00 AM - 10:00 AM: SE | 10:15 AM - 11:15 AM: DAA | 02:00 PM - 04:00 PM
         </div>
       )}
 
-      {/* Header Banner - Sky Blue Theme */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-sky-100 via-sky-50 to-blue-100 p-5 rounded-2xl border-2 border-sky-300 shadow-md relative overflow-hidden">
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-sky-100 via-sky-50 to-blue-100 p-4 sm:p-5 rounded-2xl border-2 border-sky-300 shadow-md relative overflow-hidden">
         <div className="space-y-1 z-10">
           <div className="flex items-center gap-2">
             <span className="p-1.5 rounded-xl bg-sky-200 border border-sky-300 text-sky-800">
               <BrainCircuit className="w-4 h-4 stroke-[2.5]" />
             </span>
-            <h1 className="text-lg md:text-xl font-black tracking-tight text-slate-900">All-Time Memory</h1>
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900">Academic Lock</h1>
             <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 bg-sky-200/80 px-2 py-0.5 rounded-full border border-sky-300">
-              Permanent Context
+              PDF & Photo Supported
             </span>
           </div>
-          <p className="text-slate-600 text-xs md:text-sm max-w-xl font-medium">
-            Upload your syllabus PDF or photo, college timetable, and rules. SourceLock embeds this background into every AI answer.
+          <p className="text-slate-600 text-xs sm:text-sm max-w-2xl font-medium">
+            Lock your complete academic profile. Every section accepts <b>PDFs, Word documents, or photos</b> from your phone camera. SourceLock College AI references this locked memory for every answer.
           </p>
         </div>
 
-        {/* RED Quick Template Load Button */}
+        {/* Quick Template Button */}
         <div className="z-10 shrink-0 w-full sm:w-auto">
           <button
             onClick={loadVTUTemplate}
             className="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md shadow-red-500/30 transition-all flex items-center justify-center gap-1.5 border border-red-400 active:scale-95 uppercase tracking-wider"
           >
             <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
-            <span>Load VTU Sample Template</span>
+            <span>Load VTU Sample Profile</span>
           </button>
         </div>
       </div>
 
-      {/* Memory Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
-        {/* University URL */}
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-5 border-2 border-sky-200 space-y-3 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 border border-blue-200">
-                <Globe className="w-4 h-4" />
-              </div>
+      {/* University Website Card */}
+      <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border-2 border-sky-200 space-y-2.5 shadow-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 border border-blue-200">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div>
               <h3 className="font-black text-sm text-slate-900">Official University Website</h3>
-            </div>
-            {/* RED Save Button */}
-            <button
-              onClick={() => handleSave('university_url', memory['university_url'] || '')}
-              className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{saving === 'university_url' ? 'Saved!' : 'Save'}</span>
-            </button>
-          </div>
-          <input
-            type="text"
-            className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500 font-mono"
-            placeholder="e.g. https://vtu.ac.in"
-            value={memory['university_url'] || ''}
-            onChange={e => setMemory({ ...memory, ['university_url']: e.target.value })}
-          />
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-            <Info className="w-3 h-3 text-sky-600 shrink-0" /> Checked by University Watch scraper for official circulars.
-          </p>
-        </div>
-
-        {/* Course Details */}
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-5 border-2 border-sky-200 space-y-3 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600 border border-purple-200">
-                <Award className="w-4 h-4" />
-              </div>
-              <h3 className="font-black text-sm text-slate-900">Course, Semester & Scheme</h3>
-            </div>
-            {/* RED Save Button */}
-            <button
-              onClick={() => handleSave('course_details', memory['course_details'] || '')}
-              className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{saving === 'course_details' ? 'Saved!' : 'Save'}</span>
-            </button>
-          </div>
-          <textarea
-            className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500"
-            rows={2}
-            placeholder="e.g. B.Tech Computer Science, Semester 5, VTU Scheme (5 Modules, 100 Marks)..."
-            value={memory['course_details'] || ''}
-            onChange={e => setMemory({ ...memory, ['course_details']: e.target.value })}
-          />
-        </div>
-
-        {/* ======================================================== */}
-        {/* SYLLABUS CARD WITH PDF / PHOTO / DOC UPLOAD             */}
-        {/* ======================================================== */}
-        <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl rounded-2xl p-5 border-2 border-sky-200 space-y-3 shadow-xs">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 border border-emerald-200">
-                <BookOpen className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm text-slate-900">Course Syllabus (Text, PDF, or Photo)</h3>
-                <p className="text-[11px] text-slate-500 font-medium">Add text directly or upload your syllabus document/image</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {/* UPLOAD PDF / PHOTO BUTTON */}
-              <label className={`cursor-pointer bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 border border-sky-500 shadow-xs active:scale-95 ${
-                uploadingSyllabus ? 'opacity-70 pointer-events-none' : ''
-              }`}>
-                {uploadingSyllabus ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Extracting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload PDF / Photo</span>
-                  </>
-                )}
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp" 
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileUpload(e.target.files[0], 'syllabus');
-                      e.target.value = '';
-                    }
-                  }} 
-                  disabled={uploadingSyllabus} 
-                />
-              </label>
-
-              {/* SAVE BUTTON */}
-              <button
-                onClick={() => handleSave('syllabus', memory['syllabus'] || '')}
-                className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{saving === 'syllabus' ? 'Saved!' : 'Save'}</span>
-              </button>
+              <p className="text-[11px] text-slate-500 font-medium">Used for official scraper proofs and university updates</p>
             </div>
           </div>
-
-          {/* Syllabus Image Thumbnail Preview if attached */}
-          {memory['syllabus_image'] && (
-            <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl flex items-center gap-3">
-              <img 
-                src={getFileUrl(`/vault/${memory['syllabus_image']}`)} 
-                alt="Syllabus Preview" 
-                className="w-16 h-16 object-cover rounded-lg border border-sky-300 shadow-xs"
-              />
-              <div className="text-xs">
-                <span className="font-bold text-slate-800 flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5 text-sky-600" /> Syllabus Photo Attached
-                </span>
-                <a 
-                  href={getFileUrl(`/vault/${memory['syllabus_image']}`)} 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="text-sky-700 font-semibold underline text-[11px] block mt-0.5"
-                >
-                  View Full Image
-                </a>
-              </div>
-            </div>
-          )}
-
-          <textarea
-            className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-3 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500 font-mono leading-relaxed"
-            rows={7}
-            placeholder="Module 1: Topics... Module 2: Topics... (or click Upload PDF / Photo above to auto-fill)"
-            value={memory['syllabus'] || ''}
-            onChange={e => setMemory({ ...memory, ['syllabus']: e.target.value })}
-          />
+          <button
+            onClick={() => handleSave('university_url', memory['university_url'] || '')}
+            className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{savingKey === 'university_url' ? 'Saved!' : 'Save'}</span>
+          </button>
         </div>
-
-        {/* ======================================================== */}
-        {/* TIMETABLE CARD                                           */}
-        {/* ======================================================== */}
-        <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl rounded-2xl p-5 border-2 border-sky-200 space-y-3 shadow-xs">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 border border-amber-200">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm text-slate-900">College Weekly Timetable</h3>
-                <p className="text-[11px] text-slate-500 font-medium">Mapped daily to your uploaded textbooks by the Dynamic Study Planner</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleSave('timetable', memory['timetable'] || '')}
-              className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{saving === 'timetable' ? 'Saved!' : 'Save'}</span>
-            </button>
-          </div>
-          <textarea
-            className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-3 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500 font-mono leading-relaxed"
-            rows={5}
-            placeholder="Monday: 09:00 AM - 10:00 AM: Subject 1 | 10:15 AM - 11:15 AM: Subject 2..."
-            value={memory['timetable'] || ''}
-            onChange={e => setMemory({ ...memory, ['timetable']: e.target.value })}
-          />
-        </div>
-
+        <input
+          type="text"
+          className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500 font-mono"
+          placeholder="e.g. https://vtu.ac.in"
+          value={memory['university_url'] || ''}
+          onChange={e => setMemory({ ...memory, ['university_url']: e.target.value })}
+        />
       </div>
+
+      {/* ======================================================== */}
+      {/* MULTI-SECTION ACADEMIC LOCK CARDS (EACH WITH PDF & PHOTO) */}
+      {/* ======================================================== */}
+      <div className="space-y-4">
+        {sections.map((sec) => {
+          const Icon = sec.icon;
+          const imageKey = `${sec.key}_image`;
+          const attachedImage = memory[imageKey];
+          const isUploading = uploadingSection === sec.key;
+          const isSaving = savingKey === sec.key;
+
+          return (
+            <div 
+              key={sec.key}
+              className="bg-white/95 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border-2 border-sky-200 space-y-3 shadow-xs hover:border-sky-300 transition-colors"
+            >
+              {/* Card Header & Action Buttons */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-1.5 rounded-xl ${sec.iconBg} ${sec.iconColor} border border-sky-200 shadow-xs`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900">{sec.title}</h3>
+                    <p className="text-[11px] text-slate-500 font-medium">{sec.description}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  {/* UPLOAD PDF / PHOTO BUTTON */}
+                  <label className={`cursor-pointer bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 border border-sky-500 shadow-xs active:scale-95 ${
+                    isUploading ? 'opacity-70 pointer-events-none' : ''
+                  }`}>
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload PDF / Photo</span>
+                      </>
+                    )}
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp" 
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileUpload(e.target.files[0], sec.key);
+                          e.target.value = '';
+                        }
+                      }} 
+                      disabled={isUploading} 
+                    />
+                  </label>
+
+                  {/* SAVE BUTTON */}
+                  <button
+                    onClick={() => handleSave(sec.key, memory[sec.key] || '')}
+                    className="bg-red-600 hover:bg-red-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1 border border-red-400 uppercase tracking-wider active:scale-95"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? 'Saved!' : 'Save'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* ATTACHED PHOTO THUMBNAIL PREVIEW (If photo exists) */}
+              {attachedImage && (
+                <div className="p-2.5 bg-sky-50/90 border border-sky-200 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={getFileUrl(`/vault/${attachedImage}`)} 
+                      alt={`${sec.title} Preview`} 
+                      className="w-14 h-14 object-cover rounded-lg border border-sky-300 shadow-xs bg-white"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-slate-800 flex items-center gap-1">
+                        <ImageIcon className="w-3.5 h-3.5 text-sky-600" /> Attached Photo: {attachedImage}
+                      </span>
+                      <a 
+                        href={getFileUrl(`/vault/${attachedImage}`)} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-sky-700 font-bold underline text-[11px] inline-flex items-center gap-1 mt-0.5 hover:text-sky-900"
+                      >
+                        <span>View Full Screen</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemoveImage(imageKey)}
+                    className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                    title="Remove attached photo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* TEXT EDIT AREA */}
+              <textarea
+                className="w-full bg-sky-50 border-2 border-sky-200 rounded-xl p-3 text-xs text-slate-900 font-bold focus:outline-none focus:border-sky-500 font-mono leading-relaxed shadow-inner"
+                rows={sec.rows || 4}
+                placeholder={sec.placeholder}
+                value={memory[sec.key] || ''}
+                onChange={e => setMemory({ ...memory, [sec.key]: e.target.value })}
+              />
+            </div>
+          );
+        })}
+      </div>
+
     </div>
   );
 }
