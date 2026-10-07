@@ -1,30 +1,27 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import VaultPage from './pages/VaultPage';
-import ReaderPage from './pages/ReaderPage';
+import CollegeAIPage from './pages/CollegeAIPage';
 import MemoryPage from './pages/MemoryPage';
 import PlannerPage from './pages/PlannerPage';
 import UniversityPage from './pages/UniversityPage';
 import LoginPage from './pages/LoginPage';
 import { 
-  FolderLock, 
+  Sparkles,
   BrainCircuit, 
   CalendarRange, 
   GraduationCap, 
   ShieldCheck, 
-  LogOut,
-  BookOpen
+  LogOut 
 } from 'lucide-react';
 import { useState } from 'react';
 
 function TopNavigation({ user, onLogout }: { user: any; onLogout: () => void }) {
   const location = useLocation();
 
-  // 4 Core Academic Study Spaces (Clean & Spacious)
+  // SourceLock 2.0 Core Spaces: AI Companion, Academic Lock, and Study Planner
   const navItems = [
-    { path: '/', label: 'Vault', icon: FolderLock },
-    { path: '/reader', label: 'Split Reader', icon: BookOpen },
-    { path: '/memory', label: 'Memory', icon: BrainCircuit },
-    { path: '/planner', label: 'Planner', icon: CalendarRange },
+    { path: '/', label: 'College AI', icon: Sparkles },
+    { path: '/memory', label: 'Academic Lock', icon: BrainCircuit },
+    { path: '/planner', label: 'Study Planner', icon: CalendarRange },
   ];
 
   const isUnivActive = location.pathname.startsWith('/university');
@@ -40,7 +37,7 @@ function TopNavigation({ user, onLogout }: { user: any; onLogout: () => void }) 
           </div>
           <div>
             <h1 className="font-black text-sm md:text-base text-slate-900 tracking-tight leading-none">SourceLock</h1>
-            <span className="text-[10px] text-sky-800 font-bold uppercase tracking-wider">Study SPACE</span>
+            <span className="text-[10px] text-sky-800 font-bold uppercase tracking-wider">College SPACE</span>
           </div>
         </div>
 
@@ -79,17 +76,19 @@ function TopNavigation({ user, onLogout }: { user: any; onLogout: () => void }) 
         </div>
       </div>
 
-      {/* TOP COMPACT RECTANGLE GLASS SHINING YELLOW BUTTONS (4 Primary Spaces) */}
+      {/* TOP COMPACT RECTANGLE GLASS SHINING YELLOW BUTTONS (3 Core Focus Spaces) */}
       <nav className="flex items-center gap-1.5 md:gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 justify-start md:justify-center no-scrollbar">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+          const isActive = 
+            (item.path === '/' && (location.pathname === '/' || location.pathname === '/ai')) ||
+            (item.path !== '/' && location.pathname.startsWith(item.path));
           
           return (
             <Link
               key={item.path}
               to={item.path}
-              className={`px-3 py-1.5 md:px-3.5 md:py-2 rounded-xl font-black text-[11px] md:text-xs flex items-center gap-1.5 transition-all duration-200 shrink-0 uppercase tracking-wider shadow-sm whitespace-nowrap active:scale-95 ${
+              className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black text-xs md:text-sm flex items-center gap-1.5 transition-all duration-200 shrink-0 uppercase tracking-wider shadow-sm whitespace-nowrap active:scale-95 ${
                 isActive
                   ? 'bg-yellow-400 text-slate-950 border-2 border-yellow-500 shadow-[0_0_12px_rgba(250,204,21,0.7)] scale-102 ring-1 ring-yellow-400'
                   : 'bg-yellow-300/90 hover:bg-yellow-400 text-slate-950 border border-yellow-400 shadow-xs'
@@ -134,15 +133,14 @@ function App() {
         {/* CENTERED SKY BLUE APP CONTAINER */}
         <div className="w-full max-w-7xl min-h-screen md:min-h-0 md:h-[94vh] bg-sky-50/95 rounded-none md:rounded-3xl border-0 md:border-2 border-sky-300 shadow-[0_20px_60px_rgba(14,165,233,0.35)] flex flex-col overflow-hidden backdrop-blur-xl">
           
-          {/* Top Navigation Bar with Horizontal Rectangle Glass Yellow Buttons */}
+          {/* Top Navigation Bar */}
           <TopNavigation user={user} onLogout={handleLogout} />
 
           {/* Main Workspace Section */}
           <main className="flex-1 flex flex-col h-full overflow-hidden bg-gradient-to-b from-sky-50 to-sky-100">
             <Routes>
-              <Route path="/" element={<VaultPage />} />
-              <Route path="/reader" element={<ReaderPage />} />
-              <Route path="/read/:id" element={<ReaderPage />} />
+              <Route path="/" element={<CollegeAIPage />} />
+              <Route path="/ai" element={<CollegeAIPage />} />
               <Route path="/memory" element={<MemoryPage />} />
               <Route path="/planner" element={<PlannerPage />} />
               <Route path="/university" element={<UniversityPage />} />

@@ -4,36 +4,44 @@ export function generateStudyPlan() {
   try {
     const timetableRow = queryAll("SELECT value FROM memory WHERE key = 'timetable'");
     const syllabusRow = queryAll("SELECT value FROM memory WHERE key = 'syllabus'");
-    const documents = queryAll("SELECT id, originalName FROM documents WHERE status = 'ready'");
+
+    const timetableText = (timetableRow[0]?.value as string) || '';
+    const syllabusText = (syllabusRow[0]?.value as string) || '';
+
+    // Extract subjects or modules from syllabus text
+    const syllabusLines = syllabusText
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 5 && !l.startsWith('==='));
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const plan: any[] = [];
-    let docIndex = 0;
 
-    for (const day of days) {
-      if (documents.length > 0) {
-        const doc = documents[docIndex % documents.length];
-        const startPage = (docIndex * 15) + 1;
-        const endPage = startPage + 14;
+    const defaultSubjects = [
+      'Database Management Systems (Relational Model & Normalization)',
+      'Operating Systems (Process Synchronization & Deadlocks)',
+      'Computer Networks (Routing & TCP/IP Stack)',
+      'Design & Analysis of Algorithms (Dynamic Programming)',
+      'Software Engineering & Agile Methodologies',
+      'Weekly Active Recall & College Internal Revision'
+    ];
 
-        plan.push({
-          day,
-          time: '19:00 - 21:00',
-          task: `Study ${doc.originalName}`,
-          pages: `${startPage} - ${endPage}`,
-          status: 'pending'
-        });
-        docIndex++;
-      } else {
-        plan.push({
-          day,
-          time: '19:00 - 21:00',
-          task: 'Upload study materials to vault to get AI suggestions',
-          pages: 'N/A',
-          status: 'pending'
-        });
+    days.forEach((day, idx) => {
+      let task = defaultSubjects[idx % defaultSubjects.length];
+
+      // Use the student's actual syllabus modules if provided
+      if (syllabusLines.length > idx) {
+        task = syllabusLines[idx].replace(/^Module\s*\d*:\s*/i, '');
       }
-    }
+
+      plan.push({
+        day,
+        time: '19:30 - 21:30 (Evening Focus)',
+        task: `Study Focus: ${task}`,
+        pages: `Module ${(idx % 5) + 1} Target`,
+        status: 'pending'
+      });
+    });
 
     return plan;
   } catch (e) {
